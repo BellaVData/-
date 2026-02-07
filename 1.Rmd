@@ -1,0 +1,74 @@
+---
+title: "Анализ временных рядов авиаперевозок AirFrance"
+author: "Бэлла Долганова"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+---
+
+```{r setup, include=FALSE}
+# Этот блок только для загрузки библиотек, его не будет видно в отчете
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(lubridate)
+library(xts)
+library(ggplot2)
+library(forecast)
+library(dplyr)
+library(tidyverse)
+airfrance_data <- read.csv("var7.csv", sep = ";", stringsAsFactors = FALSE)
+
+airfrance_data$Date <- as.Date(paste0(as.character(airfrance_data$Activity.Period), "01"), format = "%Y%m%d")
+airfrance_data$Activity.Period <- NULL
+colnames(airfrance_data) <- c("Airline", "Passengers", "Date")
+
+passengers_ts <- ts(airfrance_data$Passengers, 
+                   start = c(year(min(airfrance_data$Date)), month(min(airfrance_data$Date))),
+                   frequency = 12)
+additive_model <- decompose(passengers_ts, type = "additive")
+plot(additive_model)
+
+# Готовим данные для красивого графика ggplot2
+time_vals <- time(additive_model$x)
+year_vals <- floor(time_vals)
+month_vals <- round((time_vals - year_vals) * 12) + 1
+dates_seq <- as.Date(paste(year_vals, month_vals, "01", sep = "-"), format = "%Y-%m-%d")
+
+decomp_df <- data.frame(
+  Date = dates_seq,
+  Observed = as.numeric(additive_model$x),
+  Trend = as.numeric(additive_model$trend),
+  Seasonal = as.numeric(additive_model$seasonal)
+)
+
+ggplot(decomp_df, aes(x = Date)) +
+  geom_line(aes(y = Observed, color = "Наблюдаемые данные")) +
+  geom_line(aes(y = Trend, color = "Тренд")) +
+  geom_line(aes(y = Seasonal + Trend, color = "Тренд + Сезонность")) +
+  scale_color_manual(name = "Компоненты", 
+                     values = c("Наблюдаемые данные" = "gray25", "Тренд" = "cornflowerblue", "Тренд + Сезонность" = "darkred")) +
+  labs(title = "Декомпозиция AirFrance", x = "Дата", y = "Пассажиры") +
+  theme_minimal() + theme(legend.position = "bottom")
+ggAcf(passengers_ts) + ggtitle("Автокорреляционная функция (ACF)")
+df_ap <- decomp_df %>%
+  mutate(time_idx = 1:n(), month = factor(month(Date)))
+
+lm_model <- lm(Observed ~ time_idx + month, data = df_ap)
+df_ap$fitted <- fitted(lm_model)
+
+ggplot(df_ap, aes(x = Date)) +
+  geom_line(aes(y = Observed), color = "navy") +
+  geom_line(aes(y = fitted), color = "brown", linetype = "dashed") +
+  labs(title = "Факт vs Модель (Dummy Variables)") +
+  theme_minimal()
+df_ap <- df_ap %>% mutate(t = time_idx)
+harmonic_model <- lm(Observed ~ t + sin(2 * pi * t / 12) + cos(2 * pi * t / 12), data = df_ap)
+df_ap$harmonic_fitted <- fitted(harmonic_model)
+
+ggplot(df_ap, aes(x = Date)) +
+  geom_line(aes(y = Observed), color = "navy") +
+  geom_line(aes(y = harmonic_fitted), color = "red4") +
+  labs(title = "Факт vs Модель (Гармоническая регрессия)") +
+  theme_minimal()
