@@ -1,5 +1,6 @@
 file.path <- file.choose()
-airfrance_data <- read.csv("C://Users//88/Documents//Лаб1/var7.csv", sep = ";", 
+airfrance_data <- file.path
+airfrance_data <- read.csv("C:/Users/88/Desktop/univer/аналитика данных/Лаб1/var7.csv", sep = ";", 
                            stringsAsFactors = FALSE)
 airfrance_data$Date <- as.Date(paste0(as.character(airfrance_data$Activity.Period), 
                                       "01"), format = "%Y%m%d")
@@ -142,3 +143,5 @@ ggplot(df_ap, aes(x = time)) +
   ggtitle("Гармоническая регрессия: факт vs модель") +
   ylab("Количество пассажиров") +
   xlab("Время")
+
+
